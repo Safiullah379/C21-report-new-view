@@ -1,0 +1,52 @@
+name: Verify application and standalone demo
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Strict type checking
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+      - name: Production build
+        run: pnpm build
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Browser workflows
+        run: pnpm test:e2e
+      - name: Generate standalone HTML
+        run: pnpm export:html
+      - name: Verify offline HTML
+        run: pnpm test:html
+      - name: Verify offline marketplace and SKU controls
+        run: pnpm test:html:selectors
+      - name: Save demo and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zonhack-demo-and-test-evidence
+          path: |
+            exports/
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
